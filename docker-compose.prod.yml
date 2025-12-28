@@ -1,0 +1,122 @@
+services:
+  # Zookeeper for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    networks:
+      - kafka-network
+    restart: unless-stopped
+
+  # Kafka broker
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - kafka-network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'kafka-broker-api-versions',
+          '--bootstrap-server',
+          'localhost:9092',
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: apps/api-gateway/Dockerfile
+    container_name: api-gateway
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+    ports:
+      - '3000:3000'
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - kafka-network
+    restart: unless-stopped
+
+  # User Microservice
+  user-microservice:
+    build:
+      context: .
+      dockerfile: apps/user-microservice/Dockerfile
+    container_name: user-microservice
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+    ports:
+      - '3001:3001'
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - kafka-network
+    restart: unless-stopped
+
+  # Order Microservice
+  order-microservice:
+    build:
+      context: .
+      dockerfile: apps/order-microservice/Dockerfile
+    container_name: order-microservice
+    environment:
+      - NODE_ENV=production
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - kafka-network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - api-gateway
+    networks:
+      - kafka-network
+    restart: unless-stopped
+
+networks:
+  kafka-network:
+    driver: bridge
+
+volumes:
+  zookeeper_data:
+  zookeeper_logs:
+  kafka_data:
