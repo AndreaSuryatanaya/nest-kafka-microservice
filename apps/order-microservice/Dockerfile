@@ -6,13 +6,15 @@ WORKDIR /app
 # Install dependencies
 FROM base AS deps
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci && npm cache clean --force
 
 # Build stage
 FROM base AS builder
 COPY package*.json ./
+COPY nx.json tsconfig*.json ./
+COPY apps ./apps
+COPY packages ./packages
 RUN npm ci
-COPY . .
 RUN npx nx build order-microservice --prod
 
 # Production stage
@@ -24,7 +26,8 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nestjs
 
-COPY --from=deps /app/node_modules ./node_modules
+# Copy production dependencies and built app
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist/apps/order-microservice ./dist
 
 USER nestjs
