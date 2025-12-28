@@ -24,7 +24,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Copy built application and dependencies
-COPY --from=builder /app/dist/apps/api-gateway ./dist
+COPY --from=builder /app/apps/api-gateway/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 
 EXPOSE 3000

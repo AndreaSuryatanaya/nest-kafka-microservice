@@ -24,7 +24,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Copy built application and dependencies
-COPY --from=builder /app/dist/apps/order-microservice ./dist
+COPY --from=builder /app/apps/order-microservice/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 
 CMD ["node", "dist/main.js"]
